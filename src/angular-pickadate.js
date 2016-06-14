@@ -100,11 +100,10 @@
       return function(format, options) {
         var minDate, maxDate, disabledDates, currentDate, weekStartsOn, noExtraRows;
 
-        options       = options || {};
-        format        = format  || 'yyyy-MM-dd';
-        weekStartsOn  = options.weekStartsOn;
-        noExtraRows   = options.noExtraRows;
-        disabledDates = options.disabledDates || angular.noop;
+        options      = options || {};
+        format       = format  || 'yyyy-MM-dd';
+        weekStartsOn = options.weekStartsOn;
+        noExtraRows  = options.noExtraRows;
 
         if (!angular.isNumber(weekStartsOn) || weekStartsOn < 0 || weekStartsOn > 6) weekStartsOn = 0;
 
@@ -136,6 +135,7 @@
             minDate       = this.parseDate(restrictions.minDate) || new Date(0);
             maxDate       = this.parseDate(restrictions.maxDate) || new Date(99999999999999);
             currentDate   = restrictions.currentDate;
+            disabledDates = restrictions.disabledDates || [];
           },
 
           allowPrevMonth: function() {
@@ -151,7 +151,7 @@
           buildDateObject: function(date) {
             var localDate     = angular.copy(date),
                 formattedDate = dateFilter(localDate, format),
-                disabled      = disabledDates({date: localDate, formattedDate: formattedDate}),
+                disabled      = indexOf.call(disabledDates, formattedDate) >= 0,
                 monthOffset   = this.getMonthOffset(localDate, currentDate),
                 outOfMinRange = localDate < minDate,
                 outOfMaxRange = localDate > maxDate,
@@ -249,7 +249,7 @@
           defaultDate: '=',
           minDate: '=',
           maxDate: '=',
-          disabledDates: '&',
+          disabledDates: '=',
           weekStartsOn: '='
         },
 
@@ -263,8 +263,7 @@
                 previousMonthSelectable: /^(previous|both)$/.test(attrs.selectOtherMonths),
                 nextMonthSelectable:     /^(next|both)$/.test(attrs.selectOtherMonths),
                 weekStartsOn: scope.weekStartsOn,
-                noExtraRows: attrs.hasOwnProperty('noExtraRows'),
-                disabledDates: scope.disabledDates
+                noExtraRows: attrs.hasOwnProperty('noExtraRows')
               });
 
           scope.displayPicker = !wantsModal;
@@ -280,10 +279,10 @@
           };
 
           var $render = ngModel.$render = function(options) {
-            if (angular.isArray(ngModel.$viewValue)) {
-              selectedDates = ngModel.$viewValue;
-            } else if (ngModel.$viewValue) {
-              selectedDates = [ngModel.$viewValue];
+            if (angular.isArray(ngModel.$modelValue)) {
+              selectedDates = ngModel.$modelValue;
+            } else if (ngModel.$modelValue) {
+              selectedDates = [ngModel.$modelValue];
             }
 
             scope.currentDate = dateHelper.parseDate(scope.defaultDate || selectedDates[0]) || new Date();
@@ -319,7 +318,7 @@
 
           // Workaround to watch multiple properties. XXX use $scope.$watchGroup in angular 1.3
           scope.$watch(function() {
-            return angular.toJson([scope.minDate, scope.maxDate]);
+            return angular.toJson([scope.minDate, scope.maxDate, scope.disabledDates]);
           }, $render);
 
           // Insert datepicker into DOM
@@ -327,9 +326,7 @@
             modalBindings(scope, element, compiledHtml[0]);
 
             // if the user types a date, update the picker and set validity
-            scope.$watch(function() {
-              return ngModel.$viewValue;
-            }, function(val) {
+            scope.$watch('ngModel.$modelValue', function(val) {
               var isValidDate = dateHelper.parseDate(val);
 
               if (isValidDate) $render({ skipRenderInput: true });
@@ -376,11 +373,22 @@
           }
 
           function toggleDate(dateObj, dateArray) {
-            var index = indexOf.call(dateArray, dateObj);
-            if (index === -1) {
-              dateArray.push(dateObj);
+            var isSet = false;
+            var pos = -1;
+            for (var i in dateArray) {
+              var currDate = dateArray[i];
+              if (currDate.formattedDate === dateObj.formattedDate) {
+                isSet = true;
+                pos = i;
+                break;
+              }
+            }
+            if(isSet) {
+              // is already in array and should removed
+              dateArray.splice(pos, 1);
             } else {
-              dateArray.splice(index, 1);
+              // not in array then push to array
+              dateArray.push(dateObj);
             }
             return dateArray;
           }
